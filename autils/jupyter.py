@@ -4,7 +4,7 @@ from IPython.display import display, HTML
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
-from astropy.visualization import ImageNormalize, LinearStretch, AsinhStretch, ZScaleInterval
+from astropy.visualization import ImageNormalize, LinearStretch, AsinhStretch, ZScaleInterval, HistEqStretch, LogStretch, PowerDistStretch, SinhStretch, SqrtStretch, SquaredStretch
 
 np.seterr(invalid='warn')
 
@@ -61,13 +61,14 @@ def __make_plot(data,
         pass
     # TODO: parse scale_slider
     # parse scale_method
-    norm = ImageNormalize(stretch=scale_method(), vmin=vmin, vmax=vmax)
+    args = [data] if scale_method==HistEqStretch else []
+    norm = ImageNormalize(stretch=scale_method(*args), vmin=vmin, vmax=vmax)
 
 
     # if coordinate
     # TODO: imshow. parse colormap here
     im = ax.imshow(data, cmap=colormap, norm=norm)
-    fig.colorbar(im, ax=ax, orientation='horizontal', fraction=0.046, pad=0.04)
+    fig.colorbar(im, ax=ax, orientation='vertical', fraction=0.046, pad=0.04)
     # parse show_grid
     ax.grid(show_grid)
     # show image
@@ -77,14 +78,14 @@ def __make_plot(data,
 def interactive_plot(data, wcs=None):
 
     scale_method = widgets.ToggleButtons(
-        options=[('linear', LinearStretch), 
-                #  ('log', AsinhStretch), 
-                #  ('power', AsinhStretch), 
-                #  ('sqrt', AsinhStretch), 
-                #  ('squared', AsinhStretch), 
-                #  ('asinh', AsinhStretch), 
-                #  ('sinh', AsinhStretch), 
-                 ('histogram', AsinhStretch)],
+        options=[('asinh', AsinhStretch), 
+                 ('histogram', HistEqStretch), 
+                 ('linear', LinearStretch), 
+                 ('log', LogStretch), 
+                 ('power dist', PowerDistStretch), 
+                 ('sinh', SinhStretch), 
+                 ('sqrt', SqrtStretch), 
+                 ('squared', SquaredStretch)],
         value=LinearStretch, 
         layout=Layout(width='80%', height='33px'), 
         description='',
