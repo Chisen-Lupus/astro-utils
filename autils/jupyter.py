@@ -8,6 +8,18 @@ from astropy.visualization import ImageNormalize, LinearStretch, AsinhStretch, Z
 
 np.seterr(invalid='warn')
 
+custom_css = """
+<style>
+    .widget-slider .slider {
+        height: 16px; /* Thickness of the slider bar */
+    }
+    .widget-slider .noUi-handle {
+        margin-top: 6px; /* Adjust to center the handle vertically */
+    }
+</style>
+"""
+
+display(HTML(custom_css))
 
 class __CustomNorm(Normalize):
 
@@ -29,8 +41,10 @@ def __make_plot(data,
     # parse coordinate
     if coordinate=='world':
         ax = fig.add_subplot(111, projection=wcs)
-        ax.coords[0].set_axislabel(None)  # RA label
-        ax.coords[1].set_ticklabel_visible(False)  # Hide the Dec label
+        ax.coords[0].set_axislabel_visibility_rule('ticks')
+        ax.coords[0].set_ticks_visible(False)
+        ax.coords[1].set_axislabel_visibility_rule('ticks')
+        ax.coords[1].set_ticks_visible(False)
         
     if coordinate=='image':
         ax = fig.add_subplot(111)
@@ -53,12 +67,12 @@ def __make_plot(data,
     # if coordinate
     # TODO: imshow. parse colormap here
     im = ax.imshow(data, cmap=colormap, norm=norm)
-    # fig.colorbar(im, ax=ax, orientation='horizontal', fraction=0.046, pad=0.04)
+    fig.colorbar(im, ax=ax, orientation='horizontal', fraction=0.046, pad=0.04)
     # parse show_grid
     ax.grid(show_grid)
     # show image
     fig.tight_layout()
-    plt.show()
+    # plt.show()
 
 def interactive_plot(data, wcs=None):
 
@@ -107,7 +121,7 @@ def interactive_plot(data, wcs=None):
     )
 
     show_grid = widgets.ToggleButton(
-        value=False,
+        value=True,
         description='grid',
         disabled=False,
         button_style='',
@@ -119,23 +133,12 @@ def interactive_plot(data, wcs=None):
     no_wcs = wcs is None
     coordinate = widgets.ToggleButtons(
         options=['image', 'world'],
-        value='image',
+        value='world',
         layout=Layout(width='20%', height='33px'), 
         description='',
         disabled=no_wcs, 
         style={'button_width': '47%'}
     )
-
-    custom_css = """
-    <style>
-        .widget-slider .slider {
-            height: 16px; /* Thickness of the slider bar */
-        }
-        .widget-slider .noUi-handle {
-            margin-top: 6px; /* Adjust to center the handle vertically */
-        }
-    </style>
-    """
 
     ui1 = widgets.HBox([scale_method, scale_range])
     ui2 = widgets.HBox([scale_slider, colormap, show_grid, coordinate])
@@ -151,4 +154,5 @@ def interactive_plot(data, wcs=None):
                                     'coordinate': coordinate, 
                                     'wcs':  widgets.fixed(wcs)})
 
-    display(HTML(custom_css), ui, out)
+    display(ui, out)
+    # display(out)
