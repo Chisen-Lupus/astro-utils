@@ -78,6 +78,7 @@ def __make_plot(data,
     ax.grid(show_grid)
     # show image
     fig.tight_layout()
+    plt.show()
 
 def interactive_plot(data, wcs=None):
 
@@ -167,4 +168,3 @@ def interactive_plot(data, wcs=None):
                                     'wcs':  widgets.fixed(wcs)})
 
     display(ui, out)
-    # display(out)
