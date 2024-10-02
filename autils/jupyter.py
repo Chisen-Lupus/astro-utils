@@ -28,6 +28,9 @@ def __create_triangle(x, y, l, h):
                                closed=True, color='k')
     return triangle
 
+def __reset_slider(slider, value): 
+    slider.value = value
+
 def __make_plot(data, 
             scale_method, scale_range, 
             scale_slider, colormap, show_grid, coordinate, 
@@ -111,8 +114,14 @@ def interactive_plot(data, wcs=None):
         description='',
         continuous_update=True,
         readout=False,
-        layout=Layout(width='60%')
+        layout=Layout(width='50%')
     )
+
+    reset_button = widgets.Button(
+        description='reset',
+        layout=Layout(width='10%')
+    )
+    reset_button.on_click(lambda b: __reset_slider(scale_slider, 0))
 
     colormap = widgets.Dropdown(
         options=['gist_heat', 'grey', 'seismic'],
@@ -143,7 +152,8 @@ def interactive_plot(data, wcs=None):
     )
 
     ui1 = widgets.HBox([scale_method, scale_range])
-    ui2 = widgets.HBox([scale_slider, colormap, show_grid, coordinate])
+    ui2 = widgets.HBox([reset_button, scale_slider, 
+                        colormap, show_grid, coordinate])
     ui = widgets.VBox([ui1, ui2])
 
     out = widgets.interactive_output(__make_plot, 
