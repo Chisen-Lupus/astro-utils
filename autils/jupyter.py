@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from astropy.visualization import ImageNormalize, LinearStretch, AsinhStretch, ZScaleInterval, HistEqStretch, LogStretch, PowerDistStretch, SinhStretch, SqrtStretch, SquaredStretch
 
+import matplotlib.patches as patches
+
 np.seterr(invalid='warn')
 
 custom_css = """
@@ -21,16 +23,10 @@ custom_css = """
 
 display(HTML(custom_css))
 
-class __CustomNorm(Normalize):
-
-    def __init__(self, stretch_func=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.stretch_func = stretch_func
-
-    def __call__(self, value, clip=None):
-        if self.stretch_func is not None:
-            value = self.stretch_func(value)
-        return super().__call__(value, clip)
+def __create_triangle(x, y, l, h):
+    triangle = patches.Polygon([[x, y+h], [x-l, y-h], [x+l, y-h]], 
+                               closed=True, color='k')
+    return triangle
 
 def __make_plot(data, 
             scale_method, scale_range, 
@@ -45,7 +41,6 @@ def __make_plot(data,
         ax.coords[0].set_ticks_visible(False)
         ax.coords[1].set_axislabel_visibility_rule('ticks')
         ax.coords[1].set_ticks_visible(False)
-        
     if coordinate=='image':
         ax = fig.add_subplot(111)
     else: 
@@ -59,21 +54,27 @@ def __make_plot(data,
         vmin, vmax = zscale_interval.get_limits(data)
     else: 
         pass
-    # TODO: parse scale_slider
+    # parse scale_slider
+    offset = scale_slider*(vmax - vmin)
+    vmax_shifted = vmax - offset
+    vmin_shifted = vmin - offset
     # parse scale_method
     args = [data] if scale_method==HistEqStretch else []
-    norm = ImageNormalize(stretch=scale_method(*args), vmin=vmin, vmax=vmax)
-
-
-    # if coordinate
-    # TODO: imshow. parse colormap here
+    norm = ImageNormalize(stretch=scale_method(*args), 
+                          vmin=vmin_shifted, vmax=vmax_shifted)
+    # imshow
     im = ax.imshow(data, cmap=colormap, norm=norm)
-    fig.colorbar(im, ax=ax, orientation='vertical', fraction=0.046, pad=0.04)
+    # colorbar
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    # mark the upper and lower bound of the colorbar
+    cbar.ax.add_patch(__create_triangle(0, np.min(data), 1, (vmax-vmin)/200))
+    cbar.ax.add_patch(__create_triangle(1, np.min(data), 1, (vmax-vmin)/200))
+    cbar.ax.add_patch(__create_triangle(0, np.max(data), 1, (vmin-vmax)/200))
+    cbar.ax.add_patch(__create_triangle(1, np.max(data), 1, (vmin-vmax)/200))
     # parse show_grid
     ax.grid(show_grid)
     # show image
     fig.tight_layout()
-    # plt.show()
 
 def interactive_plot(data, wcs=None):
 
@@ -103,8 +104,8 @@ def interactive_plot(data, wcs=None):
     )
 
     scale_slider = widgets.FloatSlider(
-        value=0.5,
-        min=0,
+        value=0,
+        min=-1,
         max=1,
         step=0.005,
         description='',
