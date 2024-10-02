@@ -24,7 +24,7 @@ custom_css = """
 display(HTML(custom_css))
 
 def __create_triangle(x, y, l, h):
-    triangle = patches.Polygon([[x, y+h], [x-l, y-h], [x+l, y-h]], 
+    triangle = patches.Polygon([[x, y+h], [x-l/2, y], [x+l/2, y]], 
                                closed=True, color='k')
     return triangle
 
