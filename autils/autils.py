@@ -7,10 +7,55 @@ from astropy.visualization import make_lupton_rgb, ZScaleInterval, astropy_mpl_s
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import os
+from IPython import get_ipython
 
 plt.style.use(astropy_mpl_style)
 plt.rcParams['image.origin'] = 'lower'
 plt.rcParams['image.interpolation'] = 'none'
+
+# usable and used in jupyter.py
+
+class TemporaryMatplotlibConfig:
+    def __init__(self, backend='inline', figure_format='retina'):
+        self.backend = backend
+        self.figure_format = figure_format
+        self.ipython = get_ipython()
+        
+        # Retrieve the current configuration for restoration
+        self.original_backend = plt.get_backend() if self.ipython else None
+        self.original_figure_format = (
+            self.ipython.config.InlineBackend.figure_format 
+            if 'InlineBackend.figure_format' in self.ipython.config 
+            else None
+        )
+
+    def __enter__(self):
+        if self.ipython is not None:
+            # Apply the temporary backend and figure format
+            self.ipython.run_line_magic('matplotlib', self.backend)
+            self.ipython.run_line_magic('config', f"InlineBackend.figure_format = '{self.figure_format}'")
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.ipython is not None:
+            # Restore the original backend and figure format
+            if self.original_backend:
+                self.ipython.run_line_magic('matplotlib', self.original_backend)
+            if self.original_figure_format:
+                self.ipython.run_line_magic('config', f"InlineBackend.figure_format = '{self.original_figure_format}'")
+
+# usable but not used in other components
+
+def configure_inline_matplotlib(backend='inline', figure_format='retina'):
+    ipython = get_ipython()
+    if ipython is not None:
+        # Set matplotlib to inline mode
+        ipython.run_line_magic('matplotlib', backend)
+        # Set the inline backend's figure format to retina for higher quality
+        ipython.run_line_magic('config', f"InlineBackend.figure_format = '{figure_format}'")
+
+
+
+# not used by any component
 
 def make_cutout(fits_file, position, radius):
     with fits.open(fits_file) as hdul:
