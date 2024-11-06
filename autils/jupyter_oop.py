@@ -12,11 +12,13 @@ np.seterr(invalid='warn')
 
 custom_css = """
 <style>
+    /* Thickness of the slider bar */
     .widget-slider .slider {
-        height: 16px; /* Thickness of the slider bar */
+        height: 16px; 
     }
+    /* Adjust to center the handle vertically */
     .widget-slider .noUi-handle {
-        margin-top: 6px; /* Adjust to center the handle vertically */
+        margin-top: 6px; 
     }
 </style>
 """
@@ -25,15 +27,34 @@ display(HTML(custom_css))
 
 class InteractivePlot:
     def __init__(self, data, wcs=None):
+        # parse data
         self.data = np.asarray(data, dtype=np.float64)
         self.wcs = wcs
+        # create widgets
+        self.scale_method = None
+        self.scale_range = None
+        self.scale_slider = None
+        self.reset_button = None
+        self.reset_button = None
+        self.colormap = None
+        self.show_grid = None
+        self.coordinate = None
+        self.__create_widgets()
+        # main plotting objects
+        self.fig = None
+        self.ax = None
+        self.im = None
+        self.cbar = None
+        # helper plotting parameters
+        self.norm = None
+        self.vmin = None
+        self.vmax = None
         self.vmin_shifted = None
         self.vmax_shifted = None
-        self.create_widgets()
+        # plot as soon as the class is initialized
         self.initialize_plot()
 
-    def create_widgets(self):
-        # Create widgets
+    def __create_widgets(self):
         self.scale_method = widgets.ToggleButtons(
             options=[('asinh', AsinhStretch), 
                      ('histogram', HistEqStretch), 
@@ -44,13 +65,19 @@ class InteractivePlot:
                      ('sqrt', SqrtStretch), 
                      ('squared', SquaredStretch)],
             value=LinearStretch, 
-            layout=Layout(width='80%', height='33px')
+            layout=Layout(width='80%', height='33px'), 
+            description='',
+            disabled=False, 
+            style={'button_width': '11.8%'}
         )
 
         self.scale_range = widgets.ToggleButtons(
             options=['min max', 'zscale'],
             value='min max',
-            layout=Layout(width='20%', height='33px')
+            layout=Layout(width='20%', height='33px'), 
+            description='',
+            disabled=False, 
+            style={'button_width': '47%'}
         )
 
         self.scale_slider = widgets.FloatSlider(
@@ -64,10 +91,18 @@ class InteractivePlot:
             layout=Layout(width='50%')
         )
 
+        self.reset_button = widgets.Button(
+            description='reset',
+            layout=Layout(width='10%')
+        )
+        self.reset_button.on_click(lambda b: self.__reset_slider(self.scale_slider, 0))
+
         self.colormap = widgets.Dropdown(
             options=['gist_heat', 'grey', 'seismic'],
             value='grey',
-            layout=Layout(width='10%')
+            description='',
+            disabled=False,
+            layout=Layout(width='10%'), 
         )
 
         self.show_grid = widgets.ToggleButton(
@@ -75,19 +110,26 @@ class InteractivePlot:
             description='grid',
             disabled=False,
             button_style='',
-            layout=Layout(width='10%')
+            tooltip='Description',
+            icon='check',
+            layout=Layout(width='10%'), 
         )
 
         self.coordinate = widgets.ToggleButtons(
             options=['image', 'world'],
             value='world',
-            layout=Layout(width='20%', height='33px')
+            layout=Layout(width='20%', height='33px'), 
+            description='',
+            disabled=self.wcs is None, 
+            style={'button_width': '47%'}
         )
 
-        # Define layout
         ui1 = widgets.HBox([self.scale_method, self.scale_range])
-        ui2 = widgets.HBox([self.scale_slider, self.colormap, self.show_grid, self.coordinate])
-        display(widgets.VBox([ui1, ui2]))
+        ui2 = widgets.HBox([self.reset_button, self.scale_slider, 
+                            self.colormap, self.show_grid, self.coordinate])
+        ui = widgets.VBox([ui1, ui2])
+
+        display(ui)
 
         # Attach observers
         self.scale_method.observe(self.update_scale_method, names='value')
@@ -99,17 +141,81 @@ class InteractivePlot:
 
     @log_call
     def initialize_plot(self):
-        # Initial setup
-        self.fig, self.ax = self.create_figure()
-        self.update_axes_projection()
-        self.update_image()
-        self.update_colorbar()
+        self.__setup_fig()
+        # parse coordinate
+        self.__setup_ax()
+        # parse scale_range
+        if self.scale_range.value=='min max':
+            self.vmin = np.min(self.data)
+            self.vmax = np.max(self.data)
+        elif self.scale_range.value=='zscale': 
+            zscale_interval = ZScaleInterval()
+            self.vmin, self.vmax = zscale_interval.get_limits(self.data)
+        else: 
+            raise ValueError(f'Not a valid scale_range: {self.scale_range}')
+        # parse scale_slider
+        offset = self.scale_slider.value*(self.vmax - self.vmin)
+        self.vmax_shifted = self.vmax - offset
+        self.vmin_shifted = self.vmin - offset
+        # parse scale_method
+        args = [self.data] if self.scale_method.value==HistEqStretch else []
+        self.norm = ImageNormalize(stretch=self.scale_method.value(*args), 
+                                   vmin=self.vmin_shifted, vmax=self.vmax_shifted)
+        # imshow
+        self.__setup_im()
+        # colorbar
+        self.__setup_cbar()
+        # parse show_grid
+        self.ax.grid(self.show_grid.value)
+        # show image
+        self.fig.tight_layout()
         plt.show()
 
     @log_call
-    def create_figure(self):
-        fig = plt.figure(figsize=[8, 6])
-        return fig, None
+    def __setup_fig(self):
+        self.fig = plt.figure(figsize=[8, 6])
+
+    @log_call
+    def __setup_ax(self):
+        if self.coordinate.value=='world' and self.wcs is not None:
+            self.ax = self.fig.add_subplot(111, projection=self.wcs)
+            self.ax.coords[0].set_axislabel_visibility_rule('ticks')
+            self.ax.coords[0].set_ticks_visible(False)
+            self.ax.coords[1].set_axislabel_visibility_rule('ticks')
+            self.ax.coords[1].set_ticks_visible(False)
+        elif self.coordinate.value=='image':
+            self.ax = self.fig.add_subplot(111)
+        else:
+            raise ValueError(f"Not a valid coordinate: {self.coordinate.value}")
+
+    @log_call
+    def __setup_im(self):
+        self.im = self.ax.imshow(self.data, 
+                                 interpolation='none', 
+                                 cmap=self.colormap.value, 
+                                 norm=self.norm)
+
+    @log_call
+    def __setup_cbar(self):
+        self.cbar = self.fig.colorbar(self.im, ax=self.ax, fraction=0.046, pad=0.04)
+        # mark the upper and lower bound of the colorbar
+        self.cbar.ax.add_patch(self.__create_triangle(0, np.min(self.data), 
+                                                      1, (self.vmax-self.vmin)/200))
+        self.cbar.ax.add_patch(self.__create_triangle(1, np.min(self.data), 
+                                                      1, (self.vmax-self.vmin)/200))
+        self.cbar.ax.add_patch(self.__create_triangle(0, np.max(self.data), 
+                                                      1, (self.vmin-self.vmax)/200))
+        self.cbar.ax.add_patch(self.__create_triangle(1, np.max(self.data), 
+                                                      1, (self.vmin-self.vmax)/200))
+
+
+
+
+
+
+
+
+
 
     @log_call
     def update_axes_projection(self):
@@ -179,3 +285,13 @@ class InteractivePlot:
     def update_show_grid(self, change):
         self.ax.grid(self.show_grid.value)
         self.fig.canvas.draw_idle()
+
+    # helper functions
+
+    def __create_triangle(self, x, y, l, h):
+        triangle = patches.Polygon([[x, y+h], [x-l/2, y], [x+l/2, y]], 
+                                closed=True, color='k')
+        return triangle
+
+    def __reset_slider(self, slider, value): 
+        slider.value = value
