@@ -55,6 +55,12 @@ class TemporaryMatplotlibConfig:
                                     backend=self.original_backend, 
                                     figure_format=self.original_figure_format)
 
+def log_call(func):
+    def wrapper(*args, **kwargs):
+        print(f"calling {func.__name__}")
+        return func(*args, **kwargs)
+    return wrapper
+
 # usable but not used in other components
 
 # ...

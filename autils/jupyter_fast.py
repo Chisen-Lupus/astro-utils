@@ -8,7 +8,7 @@ from matplotlib.colors import Normalize
 from astropy.visualization import ImageNormalize, LinearStretch, AsinhStretch, ZScaleInterval, HistEqStretch, LogStretch, PowerDistStretch, SinhStretch, SqrtStretch, SquaredStretch
 import matplotlib.patches as patches
 
-from autils import TemporaryMatplotlibConfig, configure_inline_matplotlib
+from autils import TemporaryMatplotlibConfig, configure_inline_matplotlib, log_call
 
 np.seterr(invalid='warn')
 
@@ -24,9 +24,11 @@ custom_css = """
 """
 
 display(HTML(custom_css))
-    
 
+
+@log_call
 def interactive_plot(data, wcs=None):
+    global fig, ax, im, cbar  # Declare global variables
 
     def __create_triangle(x, y, l, h):
         triangle = patches.Polygon([[x, y+h], [x-l/2, y], [x+l/2, y]], 
@@ -43,6 +45,7 @@ def interactive_plot(data, wcs=None):
     # plt.imshow(np.random.rand(100, 100))
     # plt.show()
 
+    @log_call
     def __initialize_plot(data, 
                 scale_method=LinearStretch, 
                 scale_range='min max', 
@@ -51,6 +54,8 @@ def interactive_plot(data, wcs=None):
                 show_grid=True, 
                 coordinate='world', 
                 wcs=wcs):
+        global fig, ax, im, cbar  # Use global variables here
+
         data = np.asarray(data, dtype=np.float64)
         fig = plt.figure(figsize=[8, 6])
         # parse coordinate
@@ -72,7 +77,7 @@ def interactive_plot(data, wcs=None):
             zscale_interval = ZScaleInterval()
             vmin, vmax = zscale_interval.get_limits(data)
         else: 
-            raise ValueError(f'not a valid scale_ragne: {scale_range}')
+            raise ValueError(f'Not a valid scale_range: {scale_range}')
         # parse scale_slider
         offset = scale_slider*(vmax - vmin)
         vmax_shifted = vmax - offset
@@ -95,49 +100,72 @@ def interactive_plot(data, wcs=None):
         # show image
         fig.tight_layout()
         plt.show()
-        return fig, ax, im, cbar
+    
+    @log_call
+    def __setup_ax(coordinate):
+        global ax
+        if coordinate.value == 'world' and wcs is not None:
+            ax = fig.add_subplot(111, projection=wcs)
+            ax.coords[0].set_axislabel_visibility_rule('ticks')
+            ax.coords[0].set_ticks_visible(False)
+            ax.coords[1].set_axislabel_visibility_rule('ticks')
+            ax.coords[1].set_ticks_visible(False)
+        elif coordinate.value == 'image':
+            ax = fig.add_subplot(111)
+        else:
+            raise ValueError(f"Not a valid coordinate: {coordinate.value}")
 
-    # def __update_coordinate(change):
-    #     if coordinate.value=='world':
-    #         ax.set
-    #         ax.coords[0].set_axislabel_visibility_rule('ticks')
-    #         ax.coords[0].set_ticks_visible(False)
-    #         ax.coords[1].set_axislabel_visibility_rule('ticks')
-    #         ax.coords[1].set_ticks_visible(False)
-    #     if coordinate.value=='image':
-    #         ax = fig.add_subplot(111)
-    #     else: 
-    #         raise ValueError(f"Not a valid coordinate: {coordinate}")
+    @log_call
+    def __update_coordinate(change):
+        global ax, im, cbar  # Access the global variables
 
+        # Clear current Axes to avoid creating a new plot
+        ax.remove()
+        # del ax
+        # Update projection based on coordinate selection
+        __setup_ax(coordinate)
 
+        im = ax.imshow(data, interpolation='none')
+        # Reapply plot parameters and update image
+        __update_plot(None)
 
-
+    @log_call
     def __update_plot(change):
-        
-        # Update scale method
-        if scale_range.value=='min max':
+        global im, cbar  # Access global variables
+
+        # Update scale range based on selected method
+        if scale_range.value == 'min max':
             vmin = np.min(data)
             vmax = np.max(data)
-        elif scale_range.value=='zscale': 
+        elif scale_range.value == 'zscale':
             zscale_interval = ZScaleInterval()
             vmin, vmax = zscale_interval.get_limits(data)
-        else: 
-            raise ValueError(f'not a valid scale_ragne: {scale_range}')
-        
-        offset = scale_slider.value*(vmax - vmin)
+        else:
+            raise ValueError(f'Not a valid scale_range: {scale_range.value}')
+
+        # Adjust for scale slider offset
+        offset = scale_slider.value * (vmax - vmin)
         vmax_shifted = vmax - offset
         vmin_shifted = vmin - offset
-        args = [data] if scale_method==HistEqStretch else []
+
+        # Update normalization based on scale method
+        args = [data] if scale_method.value == HistEqStretch else []
         norm = ImageNormalize(stretch=scale_method.value(*args), 
                             vmin=vmin_shifted, vmax=vmax_shifted)
-        im.set_norm(norm)
-        # Update colormap
-        im.set_cmap(colormap.value)
-        # Update color limits
-        im.set_clim(vmin_shifted, vmax_shifted)
-        # Update colorbar
+
+        # Update image content (assuming `data` has been changed)
+        im.set_data(data)  # Use `data` or `new_data` if the image data has changed
+        im.set_norm(norm)  # Update the normalization
+        im.set_cmap(colormap.value)  # Update colormap
+        im.set_clim(vmin_shifted, vmax_shifted)  # Update color limits
+
+        # Update colorbar to reflect changes
         cbar.update_normal(im)
-        fig.canvas.draw_idle()  # Efficient redraw without full replot
+
+        # Efficiently redraw the figure canvas
+        fig.canvas.draw_idle()
+
+
 
     # define sliders
     
@@ -222,7 +250,7 @@ def interactive_plot(data, wcs=None):
 
     # Initialize plot
 
-    fig, ax, im, cbar = __initialize_plot(data)
+    __initialize_plot(data)
 
     # Link widgets to update function
 
@@ -231,4 +259,4 @@ def interactive_plot(data, wcs=None):
     scale_slider.observe(__update_plot, names='value')
     colormap.observe(__update_plot, names='value')
     show_grid.observe(__update_plot, names='value')
-    coordinate.observe(__update_plot, names='value')
+    coordinate.observe(__update_coordinate, names='value')
