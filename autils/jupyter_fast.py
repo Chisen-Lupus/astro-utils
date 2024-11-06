@@ -30,6 +30,14 @@ display(HTML(custom_css))
 def interactive_plot(data, wcs=None):
     global fig, ax, im, cbar  # Declare global variables
 
+    class __PlotSettings:
+        def __init__(self):
+            self.vmin_shifted = 0
+            self.vmax_shifted = 1
+
+    plot_settings = __PlotSettings()  # Accessible instance
+
+
     def __create_triangle(x, y, l, h):
         triangle = patches.Polygon([[x, y+h], [x-l/2, y], [x+l/2, y]], 
                                 closed=True, color='k')
@@ -40,54 +48,68 @@ def interactive_plot(data, wcs=None):
     
     # with TemporaryMatplotlibConfig(backend='widget'):
 
-    # # configure_inline_matplotlib(backend='widget')
-    # print(plt.get_backend())
-    # plt.imshow(np.random.rand(100, 100))
-    # plt.show()
-
     @log_call
-    def __initialize_plot(data, 
-                scale_method=LinearStretch, 
-                scale_range='min max', 
-                scale_slider=0, 
-                colormap='grey', 
-                show_grid=True, 
-                coordinate='world', 
-                wcs=wcs):
-        global fig, ax, im, cbar  # Use global variables here
-
+    def __initialize_plot(data, wcs, scale_method, scale_range, scale_slider, colormap, show_grid, coordinate, plot_settings):
+        global fig, ax, im, cbar
+        global vmax_shifted
         data = np.asarray(data, dtype=np.float64)
-        fig = plt.figure(figsize=[8, 6])
+        __setup_fig()
         # parse coordinate
-        if coordinate=='world':
-            ax = fig.add_subplot(111, projection=wcs)
-            ax.coords[0].set_axislabel_visibility_rule('ticks')
-            ax.coords[0].set_ticks_visible(False)
-            ax.coords[1].set_axislabel_visibility_rule('ticks')
-            ax.coords[1].set_ticks_visible(False)
-        elif coordinate=='image':
-            ax = fig.add_subplot(111)
-        else: 
-            raise ValueError(f"Not a valid coordinate: {coordinate}")
+        __setup_ax(coordinate, wcs)
         # parse scale_range
-        if scale_range=='min max':
+        if scale_range.value=='min max':
             vmin = np.min(data)
             vmax = np.max(data)
-        elif scale_range=='zscale': 
+        elif scale_range.value=='zscale': 
             zscale_interval = ZScaleInterval()
             vmin, vmax = zscale_interval.get_limits(data)
         else: 
             raise ValueError(f'Not a valid scale_range: {scale_range}')
         # parse scale_slider
-        offset = scale_slider*(vmax - vmin)
+        offset = scale_slider.value*(vmax - vmin)
         vmax_shifted = vmax - offset
         vmin_shifted = vmin - offset
         # parse scale_method
-        args = [data] if scale_method==HistEqStretch else []
-        norm = ImageNormalize(stretch=scale_method(*args), 
+        args = [data] if scale_method.value==HistEqStretch else []
+        norm = ImageNormalize(stretch=scale_method.value(*args), 
                             vmin=vmin_shifted, vmax=vmax_shifted)
         # imshow
-        im = ax.imshow(data, interpolation='none', cmap=colormap, norm=norm)
+        __setup_im(colormap, norm)
+        # colorbar
+        __setup_cbar(vmax, vmin)
+        # parse show_grid
+        ax.grid(show_grid.value)
+        # show image
+        fig.tight_layout()
+        plt.show()
+
+    @log_call
+    def __setup_fig():
+        global fig
+        fig = plt.figure(figsize=[8, 6])
+
+    @log_call
+    def __setup_ax(coordinate, wcs):
+        global fig, ax
+        if coordinate.value=='world' and wcs is not None:
+            ax = fig.add_subplot(111, projection=wcs)
+            ax.coords[0].set_axislabel_visibility_rule('ticks')
+            ax.coords[0].set_ticks_visible(False)
+            ax.coords[1].set_axislabel_visibility_rule('ticks')
+            ax.coords[1].set_ticks_visible(False)
+        elif coordinate.value=='image':
+            ax = fig.add_subplot(111)
+        else:
+            raise ValueError(f"Not a valid coordinate: {coordinate.value}")
+
+    @log_call
+    def __setup_im(colormap, norm):
+        global fig, ax, im
+        im = ax.imshow(data, interpolation='none', cmap=colormap.value, norm=norm)
+
+    @log_call
+    def __setup_cbar(vmax, vmin):
+        global fig, ax, im, cbar
         # colorbar
         cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         # mark the upper and lower bound of the colorbar
@@ -95,39 +117,38 @@ def interactive_plot(data, wcs=None):
         cbar.ax.add_patch(__create_triangle(1, np.min(data), 1, (vmax-vmin)/200))
         cbar.ax.add_patch(__create_triangle(0, np.max(data), 1, (vmin-vmax)/200))
         cbar.ax.add_patch(__create_triangle(1, np.max(data), 1, (vmin-vmax)/200))
-        # parse show_grid
-        ax.grid(show_grid)
-        # show image
-        fig.tight_layout()
-        plt.show()
-    
-    @log_call
-    def __setup_ax(coordinate):
-        global ax
-        if coordinate.value == 'world' and wcs is not None:
-            ax = fig.add_subplot(111, projection=wcs)
-            ax.coords[0].set_axislabel_visibility_rule('ticks')
-            ax.coords[0].set_ticks_visible(False)
-            ax.coords[1].set_axislabel_visibility_rule('ticks')
-            ax.coords[1].set_ticks_visible(False)
-        elif coordinate.value == 'image':
-            ax = fig.add_subplot(111)
-        else:
-            raise ValueError(f"Not a valid coordinate: {coordinate.value}")
 
+    # updating coornidate requires reproducing ax into a instance of another class
     @log_call
     def __update_coordinate(change):
-        global ax, im, cbar  # Access the global variables
-
-        # Clear current Axes to avoid creating a new plot
+        global ax, im
         ax.remove()
-        # del ax
-        # Update projection based on coordinate selection
-        __setup_ax(coordinate)
-
+        __setup_ax(coordinate, wcs)
         im = ax.imshow(data, interpolation='none')
-        # Reapply plot parameters and update image
         __update_plot(None)
+
+    @log_call
+    def __update_scale_method(change, vmin_shifted, vmax_shifted):
+        global fig, ax, im, cbar
+        args = [data] if scale_method.value==HistEqStretch else []
+        norm = ImageNormalize(stretch=scale_method.value(*args), 
+                            vmin=vmin_shifted, vmax=vmax_shifted)
+
+    @log_call
+    def __update_scale_range(change):
+        global fig, ax, im, cbar
+
+    @log_call
+    def __update_scale_slider(change):
+        global fig, ax, im, cbar
+
+    @log_call
+    def __update_colormap(change):
+        global fig, ax, im, cbar
+
+    @log_call
+    def __update_show_grid(change):
+        global fig, ax, im, cbar
 
     @log_call
     def __update_plot(change):
@@ -154,7 +175,7 @@ def interactive_plot(data, wcs=None):
                             vmin=vmin_shifted, vmax=vmax_shifted)
 
         # Update image content (assuming `data` has been changed)
-        im.set_data(data)  # Use `data` or `new_data` if the image data has changed
+        # im.set_data(data)  # Use `data` or `new_data` if the image data has changed
         im.set_norm(norm)  # Update the normalization
         im.set_cmap(colormap.value)  # Update colormap
         im.set_clim(vmin_shifted, vmax_shifted)  # Update color limits
@@ -250,13 +271,23 @@ def interactive_plot(data, wcs=None):
 
     # Initialize plot
 
-    __initialize_plot(data)
+    __initialize_plot(data=data,
+                      wcs=wcs,
+                      plot_settings=plot_settings,
+                      scale_method=scale_method,
+                      scale_range=scale_range,
+                      scale_slider=scale_slider,
+                      colormap=colormap,
+                      show_grid=show_grid,
+                      coordinate=coordinate)
 
     # Link widgets to update function
 
-    scale_method.observe(__update_plot, names='value')
-    scale_range.observe(__update_plot, names='value')
-    scale_slider.observe(__update_plot, names='value')
-    colormap.observe(__update_plot, names='value')
-    show_grid.observe(__update_plot, names='value')
+    scale_method.observe(__update_scale_method, names='value')
+    scale_range.observe(__update_scale_range, names='value')
+    scale_slider.observe(__update_scale_slider, names='value')
+    colormap.observe(__update_colormap, names='value')
+    show_grid.observe(__update_show_grid, names='value')
     coordinate.observe(__update_coordinate, names='value')
+
+    
