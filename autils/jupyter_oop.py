@@ -4,7 +4,7 @@ from IPython.display import display, HTML
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.visualization import ImageNormalize, LinearStretch, AsinhStretch, ZScaleInterval, HistEqStretch, LogStretch, PowerDistStretch, SinhStretch, SqrtStretch, SquaredStretch
-import matplotlib.patches as patches
+from matplotlib.patches import Polygon
 
 from autils import TemporaryMatplotlibConfig, configure_inline_matplotlib, log_call
 
@@ -32,6 +32,8 @@ class InteractivePlot:
         # parse data
         self.data = np.asarray(data, dtype=np.float64)
         self.wcs = wcs
+        self.vmin = np.min(data)
+        self.vmax = np.max(data)
         # create widgets
         self.scale_norm = None
         self.scale_range = None
@@ -42,25 +44,27 @@ class InteractivePlot:
         self.show_grid = None
         self.coordinate = None
         self.ui = None
-        self.__create_widgets()
+        self.__initialize_widgets()
         # main plotting objects
         self.fig = None
         self.ax = None
         self.im = None
         self.cbar = None
+        self.marker_upper = None
+        self.marker_lower = None
         # helper plotting parameters
+        self.vmin_plot = None
+        self.vmax_plot = None
+        self.vmin_plot_shifted = None
+        self.vmax_plot_shifted = None
         self.norm = None
-        self.vmin = None
-        self.vmax = None
-        self.vmin_shifted = None
-        self.vmax_shifted = None
         # plot as soon as the class is initialized
-        self.initialize_plot()
+        self.__initialize_plot()
 
-    # Initialize methods
+    # Setup methods
 
     @log_call
-    def __create_widgets(self):
+    def __setup_widgets(self):
         self.scale_norm = widgets.ToggleButtons(
             options=[('asinh', AsinhStretch), 
                      ('histogram', HistEqStretch), 
@@ -101,7 +105,7 @@ class InteractivePlot:
             description='reset',
             layout=Layout(width='10%')
         )
-        self.reset_button.on_click(lambda b: self.__reset_slider(self.scale_slider, 0))
+        self.reset_button.on_click(lambda b: self.__reset_slider())
 
         self.colormap = widgets.Dropdown(
             options=['gist_heat', 'grey', 'seismic'],
@@ -135,38 +139,6 @@ class InteractivePlot:
                             self.colormap, self.show_grid, self.coordinate])
         self.ui = widgets.VBox([ui1, ui2])
 
-        display(self.ui)
-
-        # Attach observers
-        self.scale_norm.observe(self.update_scale_norm, names='value')
-        self.scale_range.observe(self.update_scale_range, names='value')
-        self.scale_slider.observe(self.update_scale_slider, names='value')
-        self.colormap.observe(self.update_colormap, names='value')
-        self.show_grid.observe(self.update_show_grid, names='value')
-        self.coordinate.observe(self.update_coordinate, names='value')
-
-    @log_call
-    def initialize_plot(self):
-        # all the steps follow the dependency so the sequence cannot be changed
-        self.__setup_fig()
-        # parse coordinate here
-        self.__setup_ax()
-        # parse scale_range here
-        self.__parse_scale_range()
-        # parse scale_slider here
-        self.__parse_scale_slider()
-        # parse scale_norm here
-        self.__parse_scale_norm()
-        # imshow, parse show_grid here
-        self.__setup_im()
-        # colorbar
-        self.__setup_cbar()
-        # show image
-        self.fig.tight_layout()
-        plt.show()
-
-    # Setup methods
-
     @log_call
     def __setup_fig(self):
         self.fig = plt.figure(figsize=[8, 6])
@@ -197,15 +169,15 @@ class InteractivePlot:
         if self.cbar is not None:
             self.cbar.remove()
         self.cbar = self.fig.colorbar(self.im, ax=self.ax, fraction=0.046, pad=0.04)
-        # mark the upper and lower bound of the colorbar
-        self.cbar.ax.add_patch(self.__create_triangle(0, np.min(self.data), 
-                                                      1, (self.vmax-self.vmin)/200))
-        self.cbar.ax.add_patch(self.__create_triangle(1, np.min(self.data), 
-                                                      1, (self.vmax-self.vmin)/200))
-        self.cbar.ax.add_patch(self.__create_triangle(0, np.max(self.data), 
-                                                      1, (self.vmin-self.vmax)/200))
-        self.cbar.ax.add_patch(self.__create_triangle(1, np.max(self.data), 
-                                                      1, (self.vmin-self.vmax)/200))
+
+    @log_call
+    def __setup_markers(self):
+        marker_path_upper = self.__create_marker_path(self.vmax, mfraction=-0.01)
+        marker_path_lower = self.__create_marker_path(self.vmin, mfraction=0.01)
+        self.marker_upper = Polygon(marker_path_upper, closed=True, color='k')
+        self.marker_lower = Polygon(marker_path_lower, closed=True, color='k')
+        self.cbar.ax.add_patch(self.marker_upper)
+        self.cbar.ax.add_patch(self.marker_lower)
         
     # Setup helper parameters
 
@@ -213,76 +185,128 @@ class InteractivePlot:
     def __parse_scale_norm(self):
         args = [self.data] if self.scale_norm.value==HistEqStretch else []
         self.norm = ImageNormalize(stretch=self.scale_norm.value(*args), 
-                                   vmin=self.vmin_shifted, vmax=self.vmax_shifted)
+                                   vmin=self.vmin_plot_shifted, 
+                                   vmax=self.vmax_plot_shifted)
 
     @log_call
     def __parse_scale_range(self):
         if self.scale_range.value=='min max':
-            self.vmin = np.min(self.data)
-            self.vmax = np.max(self.data)
+            self.vmin_plot = self.vmin
+            self.vmax_plot = self.vmax
         elif self.scale_range.value=='zscale': 
             zscale_interval = ZScaleInterval()
-            self.vmin, self.vmax = zscale_interval.get_limits(self.data)
+            self.vmin_plot, self.vmax_plot = zscale_interval.get_limits(self.data)
         else: 
             raise ValueError(f'Not a valid scale_range: {self.scale_range}')
 
     @log_call
     def __parse_scale_slider(self):
-        offset = self.scale_slider.value*(self.vmax - self.vmin)
-        self.vmax_shifted = self.vmax - offset
-        self.vmin_shifted = self.vmin - offset
+        offset = self.scale_slider.value*(self.vmax_plot - self.vmin_plot)
+        self.vmax_plot_shifted = self.vmax_plot - offset
+        self.vmin_plot_shifted = self.vmin_plot - offset
 
     # Update methods
 
     @log_call
-    def update_coordinate(self, change):
+    def __update_coordinate(self, change):
         # it requires to reconstruct ax, im, and cbar, because ax becomes the instance of a different class
         self.ax.remove()
         self.__setup_ax()
         self.__setup_im()
         self.__setup_cbar()
+        self.__setup_markers()
         self.fig.canvas.draw_idle()
 
     @log_call
-    def update_scale_range(self, change):
+    def __update_scale_range(self, change):
         self.__parse_scale_range()
         self.__parse_scale_slider()
         self.__parse_scale_norm()
         self.im.set_norm(self.norm)
+        self.cbar.ax.add_patch(self.marker_upper)
+        self.cbar.ax.add_patch(self.marker_lower)
         self.fig.canvas.draw_idle()
 
     @log_call
-    def update_scale_slider(self, change):
+    def __update_scale_slider(self, change):
         self.__parse_scale_slider()
         self.__parse_scale_norm()
         self.im.set_norm(self.norm)
+        self.cbar.ax.add_patch(self.marker_upper)
+        self.cbar.ax.add_patch(self.marker_lower)
         self.fig.canvas.draw_idle()
 
     @log_call
-    def update_scale_norm(self, change):
+    def __update_scale_norm(self, change):
         self.__parse_scale_norm()
         self.im.set_norm(self.norm)
-        # self.im.set_cmap(self.colormap.value)
+        self.cbar.ax.add_patch(self.marker_upper)
+        self.cbar.ax.add_patch(self.marker_lower)
         self.fig.canvas.draw_idle()
     
     @log_call
-    def update_colormap(self, change):
+    def __update_colormap(self, change):
         self.im.set_cmap(self.colormap.value)
+        self.cbar.ax.add_patch(self.marker_upper)
+        self.cbar.ax.add_patch(self.marker_lower)
         self.fig.canvas.draw_idle()
 
     @log_call
-    def update_show_grid(self, change):
+    def __update_show_grid(self, change):
         self.ax.grid(self.show_grid.value)
         self.fig.canvas.draw_idle()
+
+    # Initialize methods
+
+    @log_call
+    def __initialize_widgets(self):
+        # define widgets
+        self.__setup_widgets()
+        # attach observers
+        self.scale_norm.observe(self.__update_scale_norm, names='value')
+        self.scale_range.observe(self.__update_scale_range, names='value')
+        self.scale_slider.observe(self.__update_scale_slider, names='value')
+        self.colormap.observe(self.__update_colormap, names='value')
+        self.show_grid.observe(self.__update_show_grid, names='value')
+        self.coordinate.observe(self.__update_coordinate, names='value')
+        # show the widgets
+        display(self.ui)
+
+    @log_call
+    def __initialize_plot(self):
+        # all the steps follow the dependency so the sequence cannot be changed
+        self.__setup_fig()
+        # parse coordinate here
+        self.__setup_ax()
+        # parse scale_range here
+        self.__parse_scale_range()
+        # parse scale_slider here
+        self.__parse_scale_slider()
+        # parse scale_norm here
+        self.__parse_scale_norm()
+        # imshow, parse show_grid here
+        self.__setup_im()
+        # colorbar
+        self.__setup_cbar()
+        self.__setup_markers()
+        # show image
+        self.fig.tight_layout()
+        plt.show()
 
     # helper functions
 
     @log_call
-    def __create_triangle(self, x, y, l, h):
-        triangle = patches.Polygon([[x, y+h], [x-l/2, y], [x+l/2, y]], 
-                                closed=True, color='k')
-        return triangle
+    def __create_marker_path(self, mstart, mfraction=0.01):
+        cbar_height = self.vmax_plot_shifted - self.vmin_plot_shifted
+        mheight = cbar_height*mfraction
+        path = [[0, mstart], 
+                [0, mstart + mheight], 
+                [1/3, mstart + mheight/2], 
+                [2/3, mstart + mheight/2], 
+                [1, mstart + mheight],
+                [1, mstart]]
+        return path
 
     @log_call
-    def __reset_slider(self, slider, value): 
-        slider.value = value
+    def __reset_slider(self): 
+        self.scale_slider.value = 0
