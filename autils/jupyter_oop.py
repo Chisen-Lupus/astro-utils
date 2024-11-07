@@ -5,26 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.visualization import ImageNormalize, LinearStretch, AsinhStretch, ZScaleInterval, HistEqStretch, LogStretch, PowerDistStretch, SinhStretch, SqrtStretch, SquaredStretch
 from matplotlib.patches import Polygon
-from IPython import get_ipython
 
-from autils import TemporaryMatplotlibConfig, configure_inline_matplotlib, log_call
+from autils import TemporaryMatplotlibConfig, log_call
 
 np.seterr(invalid='warn')
-
-custom_css = """
-<style>
-    /* Thickness of the slider bar */
-    .widget-slider .slider {
-        height: 16px; 
-    }
-    /* Adjust to center the handle vertically */
-    .widget-slider .noUi-handle {
-        margin-top: 6px; 
-    }
-</style>
-"""
-
-display(HTML(custom_css))
 
 class InteractivePlot:
     
@@ -272,7 +256,21 @@ class InteractivePlot:
         self.colormap.observe(self.__update_colormap, names='value')
         self.show_grid.observe(self.__update_show_grid, names='value')
         self.coordinate.observe(self.__update_coordinate, names='value')
+        # custom css that shows slider better
+        custom_css = """
+        <style>
+            /* Thickness of the slider bar */
+            .widget-slider .slider {
+                height: 16px; 
+            }
+            /* Adjust to center the handle vertically */
+            .widget-slider .noUi-handle {
+                margin-top: 6px; 
+            }
+        </style>
+        """
         # show the widgets
+        display(HTML(custom_css))
         display(self.ui)
 
     # @log_call
