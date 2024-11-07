@@ -18,14 +18,9 @@ plt.rcParams['image.interpolation'] = 'none'
 def configure_inline_matplotlib(ipython=get_ipython(), 
                                 backend='inline',
                                 figure_format='retina'):
-    # if ipython is None: 
-    #     ipython = get_ipython()
     if ipython is not None:
-        # Set matplotlib to inline mode
         ipython.run_line_magic('matplotlib', backend)
-        # Set the inline backend's figure format to retina for higher quality
-        ipython.run_line_magic('config', 
-                               f"InlineBackend.figure_format = '{figure_format}'")
+        ipython.run_line_magic('config', f"InlineBackend.figure_format = '{figure_format}'")
 
 class TemporaryMatplotlibConfig:
     '''
@@ -38,12 +33,16 @@ class TemporaryMatplotlibConfig:
         self.figure_format = figure_format
         self.ipython = get_ipython()
         # Retrieve the current configuration for restoration
-        self.original_backend = plt.get_backend() if self.ipython else None
-        self.original_figure_format = (
-            self.ipython.config.InlineBackend.figure_format 
-            if 'InlineBackend.figure_format' in self.ipython.config 
-            else None
-        )
+        if self.ipython: 
+            # get 'nbagg' from either 'module://ipympl.backend_nbagg' or 'nbagg'
+            self.original_backend = plt.get_backend().split('_')[-1]
+        else:
+            self.original_backend = None
+        if 'InlineBackend.figure_format' in self.ipython.config:
+            self.original_figure_format = self.ipython.config.InlineBackend.figure_format 
+        else:
+            self.original_figure_format = None
+        
 
     def __enter__(self):
         configure_inline_matplotlib(ipython=self.ipython, 

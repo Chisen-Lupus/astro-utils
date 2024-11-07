@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.visualization import ImageNormalize, LinearStretch, AsinhStretch, ZScaleInterval, HistEqStretch, LogStretch, PowerDistStretch, SinhStretch, SqrtStretch, SquaredStretch
 from matplotlib.patches import Polygon
+from IPython import get_ipython
 
 from autils import TemporaryMatplotlibConfig, configure_inline_matplotlib, log_call
 
@@ -59,7 +60,9 @@ class InteractivePlot:
         self.vmax_plot_shifted = None
         self.norm = None
         # plot as soon as the class is initialized
-        self.__initialize_plot()
+
+        with TemporaryMatplotlibConfig(backend='widget'): 
+            self.__initialize_plot()
 
     # Setup methods
 
@@ -141,7 +144,7 @@ class InteractivePlot:
 
     @log_call
     def __setup_fig(self):
-        self.fig = plt.figure(figsize=[8, 6])
+        self.fig = plt.figure(figsize=[7.5, 6])
 
     @log_call
     def __setup_ax(self):
