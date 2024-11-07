@@ -28,7 +28,7 @@ display(HTML(custom_css))
 
 class InteractivePlot:
     
-    @log_call
+    # @log_call
     def __init__(self, data, wcs=None):
         # parse data
         self.data = np.asarray(data, dtype=np.float64)
@@ -66,7 +66,7 @@ class InteractivePlot:
 
     # Setup methods
 
-    @log_call
+    # @log_call
     def __setup_widgets(self):
         self.scale_norm = widgets.ToggleButtons(
             options=[('asinh', AsinhStretch), 
@@ -142,11 +142,11 @@ class InteractivePlot:
                             self.colormap, self.show_grid, self.coordinate])
         self.ui = widgets.VBox([ui1, ui2])
 
-    @log_call
+    # @log_call
     def __setup_fig(self):
         self.fig = plt.figure(figsize=[7.5, 6])
 
-    @log_call
+    # @log_call
     def __setup_ax(self):
         if self.coordinate.value=='world' and self.wcs is not None:
             self.ax = self.fig.add_subplot(111, projection=self.wcs)
@@ -160,20 +160,20 @@ class InteractivePlot:
             raise ValueError(f"Not a valid coordinate: {self.coordinate.value}")
         self.ax.grid(self.show_grid.value)
 
-    @log_call
+    # @log_call
     def __setup_im(self):
         self.im = self.ax.imshow(self.data, 
                                  interpolation='none', 
                                  cmap=self.colormap.value, 
                                  norm=self.norm)
 
-    @log_call
+    # @log_call
     def __setup_cbar(self):
         if self.cbar is not None:
             self.cbar.remove()
         self.cbar = self.fig.colorbar(self.im, ax=self.ax, fraction=0.046, pad=0.04)
 
-    @log_call
+    # @log_call
     def __setup_markers(self):
         marker_path_upper = self.__create_marker_path(self.vmax, mfraction=-0.01)
         marker_path_lower = self.__create_marker_path(self.vmin, mfraction=0.01)
@@ -184,14 +184,14 @@ class InteractivePlot:
         
     # Setup helper parameters
 
-    @log_call
+    # @log_call
     def __parse_scale_norm(self):
         args = [self.data] if self.scale_norm.value==HistEqStretch else []
         self.norm = ImageNormalize(stretch=self.scale_norm.value(*args), 
                                    vmin=self.vmin_plot_shifted, 
                                    vmax=self.vmax_plot_shifted)
 
-    @log_call
+    # @log_call
     def __parse_scale_range(self):
         if self.scale_range.value=='min max':
             self.vmin_plot = self.vmin
@@ -202,7 +202,7 @@ class InteractivePlot:
         else: 
             raise ValueError(f'Not a valid scale_range: {self.scale_range}')
 
-    @log_call
+    # @log_call
     def __parse_scale_slider(self):
         offset = self.scale_slider.value*(self.vmax_plot - self.vmin_plot)
         self.vmax_plot_shifted = self.vmax_plot - offset
@@ -210,7 +210,7 @@ class InteractivePlot:
 
     # Update methods
 
-    @log_call
+    # @log_call
     def __update_coordinate(self, change):
         # it requires to reconstruct ax, im, and cbar, because ax becomes the instance of a different class
         self.ax.remove()
@@ -220,7 +220,7 @@ class InteractivePlot:
         self.__setup_markers()
         self.fig.canvas.draw_idle()
 
-    @log_call
+    # @log_call
     def __update_scale_range(self, change):
         self.__parse_scale_range()
         self.__parse_scale_slider()
@@ -230,7 +230,7 @@ class InteractivePlot:
         self.cbar.ax.add_patch(self.marker_lower)
         self.fig.canvas.draw_idle()
 
-    @log_call
+    # @log_call
     def __update_scale_slider(self, change):
         self.__parse_scale_slider()
         self.__parse_scale_norm()
@@ -239,7 +239,7 @@ class InteractivePlot:
         self.cbar.ax.add_patch(self.marker_lower)
         self.fig.canvas.draw_idle()
 
-    @log_call
+    # @log_call
     def __update_scale_norm(self, change):
         self.__parse_scale_norm()
         self.im.set_norm(self.norm)
@@ -247,21 +247,21 @@ class InteractivePlot:
         self.cbar.ax.add_patch(self.marker_lower)
         self.fig.canvas.draw_idle()
     
-    @log_call
+    # @log_call
     def __update_colormap(self, change):
         self.im.set_cmap(self.colormap.value)
         self.cbar.ax.add_patch(self.marker_upper)
         self.cbar.ax.add_patch(self.marker_lower)
         self.fig.canvas.draw_idle()
 
-    @log_call
+    # @log_call
     def __update_show_grid(self, change):
         self.ax.grid(self.show_grid.value)
         self.fig.canvas.draw_idle()
 
     # Initialize methods
 
-    @log_call
+    # @log_call
     def __initialize_widgets(self):
         # define widgets
         self.__setup_widgets()
@@ -275,7 +275,7 @@ class InteractivePlot:
         # show the widgets
         display(self.ui)
 
-    @log_call
+    # @log_call
     def __initialize_plot(self):
         # all the steps follow the dependency so the sequence cannot be changed
         self.__setup_fig()
@@ -298,7 +298,7 @@ class InteractivePlot:
 
     # helper functions
 
-    @log_call
+    # @log_call
     def __create_marker_path(self, mstart, mfraction=0.01):
         cbar_height = self.vmax_plot_shifted - self.vmin_plot_shifted
         mheight = cbar_height*mfraction
@@ -310,6 +310,6 @@ class InteractivePlot:
                 [1, mstart]]
         return path
 
-    @log_call
+    # @log_call
     def __reset_slider(self): 
         self.scale_slider.value = 0
