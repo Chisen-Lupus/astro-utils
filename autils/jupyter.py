@@ -120,6 +120,8 @@ class InteractivePlot:
             disabled=self.wcs is None, 
             style={'button_width': '47%'}
         )
+        if self.wcs is None: 
+            self.coordinate.value = 'image'
 
         ui1 = widgets.HBox([self.scale_norm, self.scale_range])
         ui2 = widgets.HBox([self.reset_button, self.scale_slider, 
@@ -132,7 +134,7 @@ class InteractivePlot:
 
     # @log_call
     def __setup_ax(self):
-        if self.coordinate.value=='world' and self.wcs is not None:
+        if self.coordinate.value=='world':
             self.ax = self.fig.add_subplot(111, projection=self.wcs)
             self.ax.coords[0].set_axislabel_visibility_rule('ticks')
             self.ax.coords[0].set_ticks_visible(False)
