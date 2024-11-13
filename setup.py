@@ -10,7 +10,7 @@ setup(
         'IPython',
         'numpy',
         'matplotlib',
-        'astropy'
+        'astropy',
         'ipympl'
     ],
 )
