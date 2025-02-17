@@ -11,6 +11,7 @@ setup(
         'numpy',
         'matplotlib',
         'astropy',
-        'ipympl'
+        'ipympl', 
+        'ipywidgets'
     ],
 )
